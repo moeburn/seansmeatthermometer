@@ -13,6 +13,21 @@
 #include <ESPAsyncWebServer.h>
 #include <AsyncElegantOTA.h>
 
+#include "MusicDefinitions.h"
+
+int8_t PROGMEM TwinkleTwinkle[] = {
+  NOTE_C5,NOTE_C5,NOTE_G5,NOTE_G5,NOTE_A5,NOTE_A5,NOTE_G5,BEAT_2,
+  NOTE_F5,NOTE_F5,NOTE_E5,NOTE_E5,NOTE_D5,NOTE_D5,NOTE_C5,BEAT_2,
+  NOTE_G5,NOTE_G5,NOTE_F5,NOTE_F5,NOTE_E5,NOTE_E5,NOTE_D5,BEAT_2,
+  NOTE_G5,NOTE_G5,NOTE_F5,NOTE_F5,NOTE_E5,NOTE_E5,NOTE_D5,BEAT_2,
+  NOTE_C5,NOTE_C5,NOTE_G5,NOTE_G5,NOTE_A5,NOTE_A5,NOTE_G5,BEAT_2,
+  NOTE_F5,NOTE_F5,NOTE_E5,NOTE_E5,NOTE_D5,NOTE_D5,NOTE_C5,BEAT_4,  
+  NOTE_SILENCE,BEAT_5,SCORE_END
+};
+
+XT_MusicScore_Class Music(TwinkleTwinkle,TEMPO_ALLEGRO,INSTRUMENT_PIANO); 
+
+
 #include "SPIFFS.h"
 #include <Arduino_JSON.h>
 
@@ -21,15 +36,22 @@
 #define MUTE_PIN 2
 #define ONE_WIRE_BUS 4   
 #define PWR_LED_PIN 3
-#define button1 16
-#define button2 17
+#define button1 16 //RX2
+#define button2 17 //TX2
 #define alarm_hyst 0.2
+
+bool b1pressed = false;
+bool b2pressed = false;
+
+
 
 XT_Wav_Class Sound(RingOfFire); 
 
 XT_DAC_Audio_Class DacAudio(SPEAKER_PIN,0);   //Set up the DAC on pin 25
 
 Preferences preferences;
+
+
 
 
 SteinhartHart thermistor(9479,13027,15419, 347.35, 320.85, 286.45);
@@ -46,7 +68,7 @@ JSONVar readings;
 float tempC, tempF, tempA0, tempA1, tempA0f, tempA1f;
   int16_t adc0, adc1, adc2, adc3, therm1, therm2, therm3;
   float temp1, temp2, temp3;
-  float volts0, volts1;
+  float volts0, volts1, volts2, volts3;
 
 String getSensorReadings(){  //JSON constructor
 
@@ -88,6 +110,7 @@ int i;
 bool dallasConnected = false;
 bool calibrationMode = false;
 bool saved = false;
+String b1String, b2String;
 
 
 
@@ -123,6 +146,11 @@ void drawTemps() {
   tft.setTextFont(3);
   tft.setTextSize(2);
 
+  if (digitalRead(button1)) { b1String = "B1: ON";}
+  else { b1String = "B1: OFF";}
+  if (digitalRead(button2)) { b2String = "B2: ON";}
+  else { b2String = "B2: OFF";}
+
   if (dallasConnected) {tft.setTextFont(3); 
    dallasString = String(tempC, 1) + " C";}
   else {tft.setTextFont(2);
@@ -131,12 +159,15 @@ void drawTemps() {
   tft.setTextFont(3);
   adc0 = ads.readADC_SingleEnded(0);
   adc1 = ads.readADC_SingleEnded(1);
+  adc2 = ads.readADC_SingleEnded(2);
   volts0 = ads.computeVolts(adc0);
   volts1 = ads.computeVolts(adc1);
+  volts2 = ads.computeVolts(adc2) * 2.0;
   String a0String = "A0: " + String(adc0);
   String a1String = "A1: " + String(adc1);
   String v0String = "V0: " + String(volts0,3) + "v";
   String v1String = "V1: " + String(volts1,3) + "v";
+  String v2String = "Vs: " + String(volts2,3) + "v";
   tempA0 = thermistor.resistanceToTemperature(adc0) - 273.15;
   tempA1 = thermistor.resistanceToTemperature(adc1) - 273.15;
   tempA0f = (tempA0 * 1.8) + 32;
@@ -146,17 +177,18 @@ void drawTemps() {
   String tempA0fstring = "T0: " + String(tempA0f,2) + " F";
   String tempA1fstring = "T1: " + String(tempA1f,2) + " F";
   String debugstring = String(temp1) + "," + String(temp2) + "," + String(temp3);
-  String debugstring2 = String(therm1) + "," + String(therm2) + "," + String(therm3);
+  //String debugstring2 = String(therm1) + "," + String(therm2) + "," + String(therm3);
+  
   img.drawString(a0String, 10,40);
   img.drawString(a1String, 10,60);
   img.drawString(v0String, 10,80);
   img.drawString(v1String, 10,100);
   img.drawString(tempA0string, 10,120);
   img.drawString(tempA1string, 10,140);
-  img.drawString(tempA0fstring, 10,160);
-  img.drawString(tempA1fstring, 10,180);
+  img.drawString(b1String, 10,160);
+  img.drawString(b2String, 10,180);
   img.drawString(debugstring, 10,200);
-  img.drawString(debugstring2, 10,220);
+  img.drawString(v2String, 10,220);
   img.pushSprite(0, 0);
 }
 
@@ -174,15 +206,15 @@ void drawCalib(){
    dallasString = String(tempC, 1) + " C, A0:" + String(adc0);
   img.drawString(dallasString, 10,20);
   tft.setTextFont(3);
-  if ((tempC >= 74.8) && (tempC <= 75.2)) { 
+  if ((tempC >= 75.0) && (tempC <= 75.2)) { 
     temp1 = tempC;
     therm1 = ads.readADC_SingleEnded(0);
   }
-  if ((tempC >= 49.8) && (tempC <= 50.2)) { 
+  if ((tempC >= 50.0) && (tempC <= 50.2)) { 
     temp2 = tempC;
     therm2 = ads.readADC_SingleEnded(0);
   }
-  if ((tempC >= 24.8) && (tempC <= 25.2)) { 
+  if ((tempC >= 25.0) && (tempC <= 25.2)) { 
     temp3 = tempC;
     therm3 = ads.readADC_SingleEnded(0);
   }
@@ -221,6 +253,7 @@ void drawCalib(){
         img.drawString(coeffCstring, 10,140);
 
         if (!saved) {
+          digitalWrite(MUTE_PIN, HIGH);
           preferences.begin("my-app", false);
           preferences.putInt("temp1", temp1);
           preferences.putInt("temp2", temp2);
@@ -230,6 +263,7 @@ void drawCalib(){
           preferences.putInt("therm3", therm3);
           preferences.end();
           saved = true;
+          DacAudio.Play(&Music); 
         }
   }
   img.pushSprite(0, 0);
@@ -242,6 +276,7 @@ void setup() {
   ads.setGain(GAIN_ONE);
   pinMode(MUTE_PIN, OUTPUT);
   pinMode(PWR_LED_PIN, OUTPUT);
+  
   digitalWrite(MUTE_PIN, LOW);
   digitalWrite(PWR_LED_PIN, HIGH);
   pinMode(button1, INPUT_PULLUP);
@@ -282,9 +317,7 @@ void setup() {
   tft.println("WIFI SETTINGS RESET.  PLEASE CONNECT TO 'MR MEAT SETUP' WIFI AP, AND BROWSE TO 192.168.4.1");
   wm.resetSettings();
   }
-  img.setColorDepth(8);
-  img.createSprite(239, 239);
-  img.fillSprite(TFT_BLUE);
+
   bool res;
   // res = wm.autoConnect(); // auto generated AP name from chipid
   // res = wm.autoConnect("AutoConnectAP"); // anonymous ap
@@ -302,6 +335,7 @@ void setup() {
       tft.fillScreen(TFT_GREEN);
       tft.setCursor(0, 0);
       tft.println("Connected!");
+      tft.println(WiFi.localIP());
       digitalWrite(PWR_LED_PIN, HIGH);
       delay(250);
       digitalWrite(PWR_LED_PIN, LOW);
@@ -325,7 +359,9 @@ void setup() {
   temperatureSensors.begin(NonBlockingDallas::resolution_11, TIME_INTERVAL);
   if (temperatureSensors.getSensorsCount() > 0)
   {
-    //dallasConnected = true;
+    temp1 = 0;
+    temp2 = 0;
+    temp3 = 0;
     calibrationMode = true;
     temperatureSensors.onIntervalElapsed(handleIntervalElapsed);
     temperatureSensors.onTemperatureChange(handleTemperatureChange);
@@ -359,6 +395,9 @@ void setup() {
   tft.setCursor(0, 0);
   tft.println(WiFi.localIP());
   //digitalWrite(MUTE_PIN, HIGH);
+  img.setColorDepth(8);
+  img.createSprite(239, 239);
+  img.fillSprite(TFT_BLUE);
 }
 
 void loop() {
@@ -369,13 +408,24 @@ void loop() {
   }
   //delay(10);
   //if ((tempC > 76) && (!calibrationMode)) {calibrationMode = true;}
-  if (!calibrationMode) {drawTemps();}
-  if (calibrationMode) {drawCalib();}
-  DacAudio.FillBuffer(); 
-  if (tempA0 > 25) {
-    if(Sound.Playing==false) {
-      digitalWrite(MUTE_PIN, HIGH);
-      DacAudio.Play(&Sound);}
+  every(100){
+    if (!calibrationMode) {drawTemps();}
+    if (calibrationMode) {drawCalib();}
   }
-  else if (tempA0 < (25-alarm_hyst))  {digitalWrite(MUTE_PIN, LOW);}
+  DacAudio.FillBuffer(); 
+  if (!digitalRead(button1)) {
+    if(Music.Playing==false) {
+      DacAudio.Play(&Music);}
+  }
+
+
+ if (!digitalRead(button2)) {
+    if(Sound.Playing==false) {
+       DacAudio.Play(&Sound);}
+    }
+  
+  if ((Sound.Playing) || (Music.Playing)) {
+    digitalWrite(MUTE_PIN, HIGH); 
+  }
+  else  {digitalWrite(MUTE_PIN, LOW);}
 }
