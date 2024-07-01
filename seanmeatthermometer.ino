@@ -12,7 +12,7 @@
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 #include <AsyncElegantOTA.h>
-
+#include <nvs_flash.h>
 #include "MusicDefinitions.h"
 #include "Fonts/Roboto_Condensed_32.h"
 
@@ -38,12 +38,48 @@ int8_t PROGMEM TwinkleTwinkle[] = {
   NOTE_SILENCE,BEAT_5,SCORE_END
 };
 
+int8_t PROGMEM AlarmSong[] = {
+  BEAT_1,NOTE_SILENCE,BEAT_1,
+  BEAT_4,NOTE_C5,BEAT_4,
+  BEAT_4,NOTE_C5,BEAT_4,
+  BEAT_4,NOTE_C5,BEAT_4,
+  NOTE_SILENCE,BEAT_5,SCORE_END
+};
+
 XT_MusicScore_Class Music(TwinkleTwinkle,TEMPO_ALLEGRO,INSTRUMENT_PIANO); 
+XT_MusicScore_Class Alarm(AlarmSong,TEMPO_ALLEGRO,INSTRUMENT_PIANO);
 
 
 #include "SPIFFS.h"
 #include <Arduino_JSON.h>
-
+  
+uint16_t cmap[24];
+void initializeCmap() {
+    cmap[0] =  TFT_BLACK;              /*   0,   0,   0 */
+    cmap[1] =  TFT_NAVY;               /*   0,   0, 128 */
+    cmap[2] =  TFT_DARKGREEN;          /*   0, 128,   0 */
+    cmap[3] =  TFT_DARKCYAN;           /*   0, 128, 128 */
+    cmap[4] =  TFT_MAROON;             /* 128,   0,   0 */
+    cmap[5] =  TFT_PURPLE;             /* 128,   0, 128 */
+    cmap[6] =  TFT_OLIVE;              /* 128, 128,   0 */
+    cmap[7] =  TFT_LIGHTGREY;          /* 211, 211, 211 */
+    cmap[8] =  TFT_DARKGREY;           /* 128, 128, 128 */
+    cmap[9] =  TFT_BLUE;               /*   0,   0, 255 */
+    cmap[10] =  TFT_GREEN;             /*   0, 255,   0 */
+    cmap[11] =  TFT_CYAN;              /*   0, 255, 255 */
+    cmap[12] =  TFT_RED;               /* 255,   0,   0 */
+    cmap[13] =  TFT_MAGENTA;           /* 255,   0, 255 */
+    cmap[14] =  TFT_YELLOW;            /* 255, 255,   0 */
+    cmap[15] =  TFT_WHITE;             /* 255, 255, 255 */
+    cmap[16] =  TFT_ORANGE;            /* 255, 180,   0 */
+    cmap[17] =  TFT_GREENYELLOW;       /* 180, 255,   0 */
+    cmap[18] =  TFT_PINK;              /* 255, 192, 203 */
+    cmap[19] =  TFT_BROWN;             /* 150,  75,   0 */
+    cmap[20] =  TFT_GOLD;              /* 255, 215,   0 */
+    cmap[21] =  TFT_SILVER;            /* 192, 192, 192 */
+    cmap[22] =  TFT_SKYBLUE;           /* 135, 206, 235 */
+    cmap[23] =  TFT_VIOLET;            /* 180,  46, 226 */
+}
 
 double oldtemp, tempdiff, eta, eta2, oldtemp2, tempdiff2;
 int etamins, etasecs;
@@ -51,10 +87,14 @@ int etamins, etasecs;
 int settemp = 145;
 bool is2connected = false;
 int channel = 0;
+int setSelection = 0;
+int setAlarm, setUnits, setBGC;
+int setFGC = 15;
+int setVolume = 5;
 
 bool b1pressed = false;
 bool b2pressed = false;
-
+bool settingspage = false;
 
 
 XT_Wav_Class Sound(RingOfFire); 
@@ -124,7 +164,8 @@ bool calibrationMode = false;
 bool saved = false;
 String b1String, b2String;
 int animpos = 80;
-
+float barx;
+int32_t rssi;
 
 //Macro for 'every' 
 #define every(interval) \        
@@ -146,67 +187,91 @@ void handleIntervalElapsed(int deviceIndex, int32_t temperatureRAW)
   tempF = temperatureSensors.rawToFahrenheit(temperatureRAW);  
 }
 
+long mapf(float x, float in_min, float in_max, float out_min, float out_max)
+{
+  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
+
+
   String dallasString,  temp1string,temp2string,temp3string ;
+  
+void drawWiFiSignalStrength(int32_t x, int32_t y, int32_t radius) {
+    // Get the RSSI value
+    
+    
+    // Define colors
+    uint32_t color;
+    int numArcs;
+
+    // Determine the color and number of arcs to draw based on RSSI value
+    if (rssi > -60) {
+        color = TFT_SKYBLUE;
+        numArcs = 3;
+    } else if (rssi > -75) {
+        color = TFT_GREEN;
+        numArcs = 2;
+    } else if (rssi > -85) {
+        color = TFT_YELLOW;
+        numArcs = 2;
+    } else {
+        color = TFT_RED;
+        numArcs = 1;
+    }
+
+    // Draw the base circle/dot
+    img.fillCircle(x, y+1, 1, color);
+
+    // Draw arcs based on the determined number of arcs and color
+    if (numArcs >= 1) {
+        img.drawArc(x, y, radius / 3, radius / 3 - 1, 135, 225, color, TFT_BLACK);  // Arc 1
+    }
+    if (numArcs >= 2) {
+        img.drawArc(x, y, 2 * radius / 3, 2 * radius / 3 - 1, 135, 225, color, TFT_BLACK);  // Arc 2
+    }
+    if (numArcs >= 3) {
+        img.drawArc(x, y, radius, radius - 1, 135, 225, color, TFT_BLACK);  // Arc 3
+    }
+}
 
 void drawTemps() {
-  //adc0 = ads.readADC_SingleEnded(0);
-  //adc1 = ads.readADC_SingleEnded(1);
-  //adc2 = ads.readADC_SingleEnded(2);
+  every(100){
+    if (!digitalRead(button1) && !digitalRead(button2)) {
+      settingspage = true;
+    }
+
+    else if (!digitalRead(button1)) {settemp--;}
+    else if (!digitalRead(button2)) {settemp++;}
+  }
   
-  img.fillSprite(TFT_BLACK);
+  img.fillSprite(cmap[setBGC]);
   img.setCursor(0,0);
   img.setTextSize(1);
-  img.setTextColor(TFT_WHITE);
+  img.setTextColor(cmap[setFGC]);
   img.setTextDatum(TC_DATUM);
 
 
 
-  //tft.setTextWrap(true); // Wrap on width
-  //tft.setTextFont(3);
-  //tft.setTextSize(2);
-
-  /*if (digitalRead(button1)) { b1String = "B1: ON";}
-  else { b1String = "B1: OFF";}
-  if (digitalRead(button2)) { b2String = "B2: ON";}
-  else { b2String = "B2: OFF";}*/
-
-
-  //img.drawString(dallasString, 10,20);
-  //volts0 = ads.computeVolts(adc0);
-  //volts1 = ads.computeVolts(adc1);
-  volts2 = ads.computeVolts(adc2) * 2.0;
-  //String a0String = "A0: " + String(adc0);
-  //String a1String = "A1: " + String(adc1);
-  //String v0String = "V0: " + String(volts0,3) + "v";
-  //String v1String = "V1: " + String(volts1,3) + "v";
-  String v2String = "Vbat: " + String(volts2,3) + "v";
-  tempA0 = thermistor.resistanceToTemperature(adc0) - 273.15;
-  tempA1 = thermistor.resistanceToTemperature(adc1) - 273.15;
-  //tempA0f = (tempA0 * 1.8) + 32;
-  tempA0f = (tempA0 * 1.8) + 32;;
-  tempA1f = (tempA1 * 1.8) + 32;
-  //String tempA0string = String(tempA0f,1);
-  //String tempA1string = String(tempA1f,1);
-  //String tempA0fstring = "T0: " + String(tempA0f,2) + " F";
-  //String tempA1fstring = "T1: " + String(tempA1f,2) + " F";
-  //String debugstring = String(temp1) + "," + String(temp2) + "," + String(temp3);
-  //String debugstring2 = String(therm1) + "," + String(therm2) + "," + String(therm3);
   if (is2connected) { 
     img.setTextFont(6);
     img.drawFloat(tempA0f, 1, 60,5);
     img.drawFloat(tempA1f, 1, 180,5);
-    img.drawFastVLine(120,0,85,TFT_WHITE);
+    img.drawFastVLine(120,0,85,cmap[setFGC]);
   }
   else {
     img.setTextFont(8);
     img.drawFloat(tempA0f, 1, 115,5);
     
   }
-  img.drawFastHLine(0,85,240,TFT_WHITE);
+  img.drawFastHLine(0,85,240,cmap[setFGC]);
   img.setTextFont(1);
   img.setTextDatum(TR_DATUM);
-  img.drawString("F", 239,1);
-  img.drawCircle(229,2,1,TFT_WHITE);
+
+    if (setUnits == 0) {img.drawCircle(229,2,1,cmap[setFGC]); img.drawString("C", 239,1);}
+    else if (setUnits == 1) {img.drawCircle(229,2,1,cmap[setFGC]); img.drawString("F", 239,1);}
+    else if (setUnits == 2) {img.drawString("K", 239,1);}
+
+  
+  
   img.setTextDatum(TL_DATUM);
   img.setFreeFont(MYFONT32);   
   img.setCursor(5,100+24);
@@ -237,26 +302,26 @@ void drawTemps() {
   //img.setTextSize(1);
 
   img.setTextFont(1);
-    
-  
-  //img.drawString(a0String, 10,180);
-  //img.drawString(a1String, 10,200);
- // img.drawString(v0String, 10,80);
- // img.drawString(v1String, 10,100);
- // img.drawString(tempA0string, 10,120);
-//  img.drawString(tempA1string, 10,140);
-//  img.drawString(b1String, 10,160);
- // img.drawString(b2String, 10,180);
-//img.drawString(debugstring, 10,200);*/
 
-  img.drawFastHLine(0,228,240,TFT_WHITE);
+
+  img.drawFastHLine(0,226,240,cmap[setFGC]);
   img.setCursor(1,231);
   img.print(WiFi.localIP());
   img.setTextDatum(BR_DATUM);
-  img.drawString(v2String, 239,239);
-  img.fillRect(animpos, 232, 4, 4, TFT_RED);
+  //img.drawString(v2String, 239,239);
+  
+  //### Battery icon ###
+  img.drawRect(214,230,20,9,TFT_WHITE);
+  
+  
+  img.fillRect(214,230,barx,9,TFT_CYAN);
+  img.drawFastVLine(234,232,4,TFT_WHITE);
+  img.drawFastVLine(235,232,4,TFT_WHITE);
+
+  img.fillRect(animpos, 232, 4, 4, cmap[setFGC]);
   animpos += 2;
   if (animpos > 160) {animpos = 80;}
+  drawWiFiSignalStrength(200,237,9);
   img.pushSprite(0, 0);
 }
 
@@ -338,31 +403,145 @@ void drawCalib(){
   img.pushSprite(0, 0);
 }
 
+void drawSettings() {
+     
+     
+     
+  img.fillSprite(TFT_BLACK);
+  img.setCursor(0,0);
+  img.setTextSize(3);
+  img.setTextColor(TFT_WHITE);
+  img.setTextDatum(TL_DATUM);
+  img.setTextWrap(true); // Wrap on width
+  img.setTextFont(1);  
+  every(101) {
+    if (!digitalRead(button1)) {b1pressed = true;}
+    if (!digitalRead(button2)) {setSelection++;}
+  }
+  if (setSelection > 6) {setSelection = 0;}
+  if (setSelection == 0) {img.setTextColor(TFT_BLACK, TFT_WHITE, true); if (b1pressed) {setAlarm++; b1pressed = false;}} else {img.setTextColor(TFT_WHITE);}
+
+  img.println("Alarm:");
+
+  if (setSelection == 1) {img.setTextColor(TFT_BLACK, TFT_WHITE, true); if (b1pressed) {setUnits++; b1pressed = false;}} else {img.setTextColor(TFT_WHITE);}
+
+  img.println("Units:");
+
+  if (setSelection == 2) {img.setTextColor(TFT_BLACK, TFT_WHITE, true); if (b1pressed) {setBGC++; b1pressed = false;}} else {img.setTextColor(TFT_WHITE);}
+
+  img.println("BG Colour:");
+
+  if (setSelection == 3) {img.setTextColor(TFT_BLACK, TFT_WHITE, true); if (b1pressed) {setFGC++; b1pressed = false;}} else {img.setTextColor(TFT_WHITE);}
+
+  img.println("FG Colour:");
+
+  if (setSelection == 4) {img.setTextColor(TFT_BLACK, TFT_WHITE, true); if (b1pressed) {setVolume++; DacAudio.DacVolume=setVolume; b1pressed = false;}} else {img.setTextColor(TFT_WHITE);}
+
+  img.println("Volume:");
+
+  if (setSelection == 5) {img.setTextColor(TFT_BLACK, TFT_WHITE, true); if (b1pressed) {doSound(); b1pressed = false;}} else {img.setTextColor(TFT_WHITE);}
+
+  img.println(">Test Spk<");
+
+  if (setSelection == 6) {img.setTextColor(TFT_BLACK, TFT_WHITE, true); if (b1pressed) {savePrefs(); b1pressed = false;}} else {img.setTextColor(TFT_WHITE);}
+  img.println(">Save<");
+
+
+  img.setTextColor(TFT_WHITE);
+  if (setAlarm > 2) {setAlarm = 0;}
+  if (setUnits > 2) {setUnits = 0;}
+  if (setBGC > 23) {setBGC = 0;}
+  if (setFGC > 23) {setFGC = 0;}
+  if (setVolume > 100) {setVolume = 0;}
+  img.setCursor(220,0);
+  img.setTextDatum(TR_DATUM);
+  img.drawNumber(setAlarm, 220, 0);
+  String setUnitString;
+  if (setUnits == 0) {setUnitString = "C";} else if (setUnits == 1) {setUnitString = "F";} else {setUnitString = "K";}
+  img.drawString(setUnitString, 220, 24);
+  img.drawNumber(setBGC, 220, 24+24);
+  img.drawNumber(setFGC, 220, 24+24+24);
+  img.drawNumber(setVolume, 220, 24+24+24+24);
+  img.setTextDatum(TC_DATUM);
+  img.setTextColor(cmap[setFGC], cmap[setBGC], true);
+  String sampleString = "SAMPLE 188.8";
+  img.drawString(sampleString, 120, 24+24+24+24+24+24+24+24);
+  img.pushSprite(0, 0);
+}
+
 void doADC() {
   if (ads.conversionComplete()) {
     if (channel == 0) {
       adc0 = ads.getLastConversionResults();
+      if (setUnits == 0) {tempA0f = thermistor.resistanceToTemperature(adc0) - 273.15;}
+      else if (setUnits == 1) {
+        tempA0 = thermistor.resistanceToTemperature(adc0) - 273.15;
+        tempA0f = (tempA0 * 1.8) + 32;
+      }
+      else if (setUnits == 2) {tempA0f = thermistor.resistanceToTemperature(adc0);}
+
       ads.startADCReading(ADS1X15_REG_CONFIG_MUX_SINGLE_1, false);
       channel = 1;
       return;
     }
     if (channel == 1) {
       adc1 = ads.getLastConversionResults();
+      if (setUnits == 0) {tempA1f = thermistor.resistanceToTemperature(adc0) - 273.15;}
+      else if (setUnits == 1) {
+        tempA1 = thermistor.resistanceToTemperature(adc0) - 273.15;
+        tempA1f = (tempA1 * 1.8) + 32;
+      }
+      else if (setUnits == 2) {tempA1f = thermistor.resistanceToTemperature(adc0);}
       ads.startADCReading(ADS1X15_REG_CONFIG_MUX_SINGLE_2, false);
       channel = 2;
       return;
     }
     if (channel == 2) {
       adc2 = ads.getLastConversionResults();
+      volts2 = ads.computeVolts(adc2) * 2.0;
       ads.startADCReading(ADS1X15_REG_CONFIG_MUX_SINGLE_0, false);
       channel = 0;
       return;
     }
   }
+  
+  //String a0String = "A0: " + String(adc0);
+  //String a1String = "A1: " + String(adc1);
+  //String v0String = "V0: " + String(volts0,3) + "v";
+  //String v1String = "V1: " + String(volts1,3) + "v";
+  //String v2String = "Vbat: " + String(volts2,3) + "v";
+  
+
 }
 
+void savePrefs() {
+  preferences.begin("my-app", false);
+  preferences.putInt("setAlarm", setAlarm);
+  preferences.putInt("setUnits", setUnits);
+  preferences.putInt("setFGC", setFGC);
+  preferences.putInt("setBGC", setBGC);
+  preferences.putInt("setVolume", setVolume);
+  preferences.end();
+  settingspage = false;
+}
+
+void doSound() {
+  if (setAlarm == 0) {
+    if(Sound.Playing==false)       
+    DacAudio.Play(&Sound);
+  }
+  else if (setAlarm == 1) {
+    if(Music.Playing==false)       
+    DacAudio.Play(&Music);
+  }
+  else if (setAlarm == 2) {
+    if(Alarm.Playing==false)       
+    DacAudio.Play(&Alarm);
+  }
+}
 
 void setup() {
+  initializeCmap();
   tft.init();
   tft.setRotation(0);
   tft.fillScreen(TFT_BLACK);
@@ -376,6 +555,11 @@ void setup() {
   img.fillSprite(TFT_BLUE);
   drawTemps();
   DacAudio.StopAllSounds();
+  DacAudio.DacVolume=setVolume;
+  
+
+
+
   ads.begin();
   ads.setGain(GAIN_ONE);
   ads.startADCReading(ADS1X15_REG_CONFIG_MUX_SINGLE_0, false);
@@ -393,6 +577,11 @@ void setup() {
   therm1 = preferences.getInt("therm1", 0);
   therm2 = preferences.getInt("therm2", 0);
   therm3 = preferences.getInt("therm3", 0);
+  setAlarm = preferences.getInt("setAlarm", 0);
+  setUnits = preferences.getInt("setUnits", 0);
+  setFGC = preferences.getInt("setFGC", 0);
+  setBGC = preferences.getInt("setBGC", 0);
+  setVolume = preferences.getInt("setVolume", 0);
   preferences.end();
 
   if ((temp3 > 0) && (temp2 > 0) && (temp1 > 0)) {
@@ -409,9 +598,11 @@ void setup() {
   WiFi.mode(WIFI_STA);
   WiFiManager wm;
   if ((!digitalRead(button1) && !digitalRead(button2)) || !wm.getWiFiIsSaved()){
+    nvs_flash_erase(); // erase the NVS partition and...
+    nvs_flash_init(); // initialize the NVS partition.
     tft.fillScreen(TFT_ORANGE);
     tft.setCursor(0, 0);
-    tft.println("WIFI SETTINGS RESET.  PLEASE CONNECT TO 'MR MEAT SETUP' WIFI AP, AND BROWSE TO 192.168.4.1");
+    tft.println("ALL SETTINGS RESET.  PLEASE CONNECT TO 'MR MEAT SETUP' WIFI AP, AND BROWSE TO 192.168.4.1");
     wm.resetSettings();
     
 
@@ -492,12 +683,22 @@ void setup() {
   server.addHandler(&events);
   AsyncElegantOTA.begin(&server);  //Start the OTA firmware updater on /update
   server.begin();
-
+  rssi = WiFi.RSSI();
+  adc0 = ads.readADC_SingleEnded(0);
+  adc1 = ads.readADC_SingleEnded(1);
+  adc2 = ads.readADC_SingleEnded(2);
+  volts2 = ads.computeVolts(adc2) * 2.0;
+  barx = mapf (volts2, 3.6, 4.1, 0, 20);
 }
 
 void loop() {
   temperatureSensors.update(); 
+  doADC();
+  every(2000) {
+    rssi = WiFi.RSSI();
+  }
   every(10000) {       //Update web interface once every 10 seconds
+    barx = mapf (volts2, 3.6, 4.1, 0, 20);
     events.send("ping",NULL,millis());  
     events.send(getSensorReadings().c_str(),"new_readings" ,millis());
   }
@@ -505,40 +706,31 @@ void loop() {
   //if ((tempC > 76) && (!calibrationMode)) {calibrationMode = true;}
   every(5){
     if (adc1 < is2connectedthreshold) {is2connected = true;} else {is2connected = false;} 
-    if (!calibrationMode) {drawTemps();}
-    if (calibrationMode) {drawCalib();}
+    if (!calibrationMode) {
+      if (!settingspage) {drawTemps();}
+      else {drawSettings();}
+      }
+    else {drawCalib();}
   }
   DacAudio.FillBuffer(); 
-  every(100){
-    if (!digitalRead(button1) && !digitalRead(button2)) {
-      if(Sound.Playing==false) {
-        digitalWrite(MUTE_PIN, HIGH);
-        DacAudio.Play(&Sound);}
-    }
 
-    else if (!digitalRead(button1)) {settemp--;}
-    else if (!digitalRead(button2)) {settemp++;}
-  }
-  
-  if ((Sound.Playing) || (Music.Playing)) {
+  if ((Sound.Playing) || (Music.Playing) || (Alarm.Playing)) {
     digitalWrite(MUTE_PIN, HIGH); 
   }
   else  {digitalWrite(MUTE_PIN, LOW);}
-  doADC();
+  
 
   if ((tempA0f >= settemp) ||  (tempA1f >= settemp)) {  //If 2nd probe is connected and either temp goes above set temp, sound the alarm
-    if(Sound.Playing==false)       
-    DacAudio.Play(&Sound);
+    doSound();
   }
 
   every (ETA_INTERVAL) {  
-        tempdiff = tempA0f - oldtemp;
+    tempdiff = tempA0f - oldtemp;
     if (is2connected) {  //If 2nd probe is connected, calculate whichever ETA is sooner in seconds
       tempdiff2 = tempA1f - oldtemp2;
       eta = (((settemp - tempA0f)/tempdiff) * ETA_INTERVAL);
       eta2 = (((settemp - tempA1f)/tempdiff2) * ETA_INTERVAL);
       if ((eta2 > 0) && (eta2 < 1000) && (eta2 < eta)) {eta = eta2;}
-      
       oldtemp2 = tempA1f;
     }
     else  //Else if only one probe is connected, calculate the ETA in seconds
@@ -547,7 +739,6 @@ void loop() {
     }
     etamins = eta / (ETA_INTERVAL / 1000); 
     oldtemp = tempA0f;
-    
   }
 
 }
