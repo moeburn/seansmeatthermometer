@@ -95,6 +95,7 @@ int setVolume = 5;
 bool b1pressed = false;
 bool b2pressed = false;
 bool settingspage = false;
+int setIcons = 1;
 
 
 XT_Wav_Class Sound(RingOfFire); 
@@ -205,16 +206,16 @@ void drawWiFiSignalStrength(int32_t x, int32_t y, int32_t radius) {
 
     // Determine the color and number of arcs to draw based on RSSI value
     if (rssi > -60) {
-        color = TFT_SKYBLUE;
+        color = cmap[setFGC];
         numArcs = 3;
     } else if (rssi > -75) {
-        color = TFT_GREEN;
+        color = cmap[setFGC];
         numArcs = 2;
     } else if (rssi > -85) {
-        color = TFT_YELLOW;
+        color = cmap[setFGC];
         numArcs = 2;
     } else {
-        color = TFT_RED;
+        color = cmap[setFGC];
         numArcs = 1;
     }
 
@@ -223,13 +224,13 @@ void drawWiFiSignalStrength(int32_t x, int32_t y, int32_t radius) {
 
     // Draw arcs based on the determined number of arcs and color
     if (numArcs >= 1) {
-        img.drawArc(x, y, radius / 3, radius / 3 - 1, 135, 225, color, TFT_BLACK);  // Arc 1
+        img.drawArc(x, y, radius / 3, radius / 3 - 1, 135, 225, color, cmap[setBGC]);  // Arc 1
     }
     if (numArcs >= 2) {
-        img.drawArc(x, y, 2 * radius / 3, 2 * radius / 3 - 1, 135, 225, color, TFT_BLACK);  // Arc 2
+        img.drawArc(x, y, 2 * radius / 3, 2 * radius / 3 - 1, 135, 225, color, cmap[setBGC]);  // Arc 2
     }
     if (numArcs >= 3) {
-        img.drawArc(x, y, radius, radius - 1, 135, 225, color, TFT_BLACK);  // Arc 3
+        img.drawArc(x, y, radius, radius - 1, 135, 225, color, cmap[setBGC]);  // Arc 3
     }
 }
 
@@ -308,20 +309,26 @@ void drawTemps() {
   img.setCursor(1,231);
   img.print(WiFi.localIP());
   img.setTextDatum(BR_DATUM);
-  //img.drawString(v2String, 239,239);
+
+
   
   //### Battery icon ###
-  img.drawRect(214,230,20,9,TFT_WHITE);
-  
-  
-  img.fillRect(214,230,barx,9,TFT_CYAN);
-  img.drawFastVLine(234,232,4,TFT_WHITE);
-  img.drawFastVLine(235,232,4,TFT_WHITE);
+  if (setIcons) {
+    img.drawRect(214,230,20,9,cmap[setFGC]);
+    img.fillRect(214,230,barx,9,cmap[setFGC]);
+    img.drawFastVLine(234,232,4,cmap[setFGC]);
+    img.drawFastVLine(235,232,4,cmap[setFGC]);
+    drawWiFiSignalStrength(200,237,9);
+  }
+  else {
+    String v2String = String(rssi) + "dB/" + String(volts2,2) + "v";
+    img.drawString(v2String, 239,239);
+  }
 
   img.fillRect(animpos, 232, 4, 4, cmap[setFGC]);
   animpos += 2;
-  if (animpos > 160) {animpos = 80;}
-  drawWiFiSignalStrength(200,237,9);
+  if (animpos > 140) {animpos = 100;}
+
   img.pushSprite(0, 0);
 }
 
@@ -418,7 +425,7 @@ void drawSettings() {
     if (!digitalRead(button1)) {b1pressed = true;}
     if (!digitalRead(button2)) {setSelection++;}
   }
-  if (setSelection > 6) {setSelection = 0;}
+  if (setSelection > 7) {setSelection = 0;}
   if (setSelection == 0) {img.setTextColor(TFT_BLACK, TFT_WHITE, true); if (b1pressed) {setAlarm++; b1pressed = false;}} else {img.setTextColor(TFT_WHITE);}
 
   img.println("Alarm:");
@@ -439,15 +446,20 @@ void drawSettings() {
 
   img.println("Volume:");
 
-  if (setSelection == 5) {img.setTextColor(TFT_BLACK, TFT_WHITE, true); if (b1pressed) {doSound(); b1pressed = false;}} else {img.setTextColor(TFT_WHITE);}
+  if (setSelection == 5) {img.setTextColor(TFT_BLACK, TFT_WHITE, true); if (b1pressed) {setIcons++; b1pressed = false;}} else {img.setTextColor(TFT_WHITE);}
+
+  img.println("Icons:");
+
+  if (setSelection == 6) {img.setTextColor(TFT_BLACK, TFT_WHITE, true); if (b1pressed) {doSound(); b1pressed = false;}} else {img.setTextColor(TFT_WHITE);}
 
   img.println(">Test Spk<");
 
-  if (setSelection == 6) {img.setTextColor(TFT_BLACK, TFT_WHITE, true); if (b1pressed) {savePrefs(); b1pressed = false;}} else {img.setTextColor(TFT_WHITE);}
+  if (setSelection == 7) {img.setTextColor(TFT_BLACK, TFT_WHITE, true); if (b1pressed) {savePrefs(); b1pressed = false;}} else {img.setTextColor(TFT_WHITE);}
   img.println(">Save<");
 
 
   img.setTextColor(TFT_WHITE);
+  if (setIcons > 1) {setIcons = 0;}
   if (setAlarm > 2) {setAlarm = 0;}
   if (setUnits > 2) {setUnits = 0;}
   if (setBGC > 23) {setBGC = 0;}
@@ -457,15 +469,18 @@ void drawSettings() {
   img.setTextDatum(TR_DATUM);
   img.drawNumber(setAlarm, 220, 0);
   String setUnitString;
+  String setIconString;
   if (setUnits == 0) {setUnitString = "C";} else if (setUnits == 1) {setUnitString = "F";} else {setUnitString = "K";}
+  if (setIcons == 0) {setIconString = "N";} else if (setIcons == 1) {setIconString = "Y";} 
   img.drawString(setUnitString, 220, 24);
   img.drawNumber(setBGC, 220, 24+24);
   img.drawNumber(setFGC, 220, 24+24+24);
   img.drawNumber(setVolume, 220, 24+24+24+24);
+  img.drawString(setIconString, 220, 24+24+24+24+24);
   img.setTextDatum(TC_DATUM);
   img.setTextColor(cmap[setFGC], cmap[setBGC], true);
   String sampleString = "SAMPLE 188.8";
-  img.drawString(sampleString, 120, 24+24+24+24+24+24+24+24);
+  img.drawString(sampleString, 120, 216);
   img.pushSprite(0, 0);
 }
 
@@ -498,7 +513,6 @@ void doADC() {
     }
     if (channel == 2) {
       adc2 = ads.getLastConversionResults();
-      volts2 = ads.computeVolts(adc2) * 2.0;
       ads.startADCReading(ADS1X15_REG_CONFIG_MUX_SINGLE_0, false);
       channel = 0;
       return;
@@ -515,12 +529,14 @@ void doADC() {
 }
 
 void savePrefs() {
+  if (setFGC == setBGC) {setFGC = 15; setBGC = 0;}
   preferences.begin("my-app", false);
   preferences.putInt("setAlarm", setAlarm);
   preferences.putInt("setUnits", setUnits);
   preferences.putInt("setFGC", setFGC);
   preferences.putInt("setBGC", setBGC);
-  preferences.putInt("setVolume", setVolume);
+  preferences.putInt("setVolume", setVolume); 
+  preferences.putInt("setIcons", setIcons);
   preferences.end();
   settingspage = false;
 }
@@ -553,7 +569,7 @@ void setup() {
   img.setColorDepth(8);
   img.createSprite(239, 239);
   img.fillSprite(TFT_BLUE);
-  drawTemps();
+  
   DacAudio.StopAllSounds();
   DacAudio.DacVolume=setVolume;
   
@@ -578,12 +594,13 @@ void setup() {
   therm2 = preferences.getInt("therm2", 0);
   therm3 = preferences.getInt("therm3", 0);
   setAlarm = preferences.getInt("setAlarm", 0);
-  setUnits = preferences.getInt("setUnits", 0);
-  setFGC = preferences.getInt("setFGC", 0);
+  setUnits = preferences.getInt("setUnits", 1);
+  setFGC = preferences.getInt("setFGC", 15);
   setBGC = preferences.getInt("setBGC", 0);
-  setVolume = preferences.getInt("setVolume", 0);
+  setVolume = preferences.getInt("setVolume", 1);
+  setIcons = preferences.getInt("setIcons", 1);
   preferences.end();
-
+  if (setFGC == setBGC) {setFGC = 15; setBGC = 0;}
   if ((temp3 > 0) && (temp2 > 0) && (temp1 > 0)) {
         thermistor.setTemperature1(temp1 + 273.15);
         thermistor.setTemperature2(temp2 + 273.15);
@@ -593,7 +610,22 @@ void setup() {
         thermistor.setResistance3(therm3);
         thermistor.calcCoefficients();
   }
-
+  rssi = WiFi.RSSI();
+  adc0 = ads.readADC_SingleEnded(0);
+  adc1 = ads.readADC_SingleEnded(1);
+  adc2 = ads.readADC_SingleEnded(2);
+  volts2 = ads.computeVolts(adc2) * 2.0;
+  adc0 = ads.getLastConversionResults();
+  if (setUnits == 0) {tempA0f = thermistor.resistanceToTemperature(adc0) - 273.15; tempA1f = thermistor.resistanceToTemperature(adc0) - 273.15;}
+  else if (setUnits == 1) {
+    tempA0 = thermistor.resistanceToTemperature(adc0) - 273.15;
+    tempA0f = (tempA0 * 1.8) + 32;
+    tempA1 = thermistor.resistanceToTemperature(adc0) - 273.15;
+    tempA1f = (tempA1 * 1.8) + 32;
+  }
+  else if (setUnits == 2) {tempA0f = thermistor.resistanceToTemperature(adc0); tempA1f = thermistor.resistanceToTemperature(adc0);}
+  barx = mapf (volts2, 3.6, 4.1, 0, 20);
+  drawTemps();
 
   WiFi.mode(WIFI_STA);
   WiFiManager wm;
@@ -683,12 +715,7 @@ void setup() {
   server.addHandler(&events);
   AsyncElegantOTA.begin(&server);  //Start the OTA firmware updater on /update
   server.begin();
-  rssi = WiFi.RSSI();
-  adc0 = ads.readADC_SingleEnded(0);
-  adc1 = ads.readADC_SingleEnded(1);
-  adc2 = ads.readADC_SingleEnded(2);
-  volts2 = ads.computeVolts(adc2) * 2.0;
-  barx = mapf (volts2, 3.6, 4.1, 0, 20);
+
 }
 
 void loop() {
@@ -698,6 +725,7 @@ void loop() {
     rssi = WiFi.RSSI();
   }
   every(10000) {       //Update web interface once every 10 seconds
+    volts2 = ads.computeVolts(adc2) * 2.0;
     barx = mapf (volts2, 3.6, 4.1, 0, 20);
     events.send("ping",NULL,millis());  
     events.send(getSensorReadings().c_str(),"new_readings" ,millis());
