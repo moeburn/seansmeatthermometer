@@ -95,6 +95,7 @@ int setVolume = 5;
 bool b1pressed = false;
 bool b2pressed = false;
 bool settingspage = false;
+bool kincreased = false;
 int setIcons = 1;
 
 
@@ -107,7 +108,8 @@ Preferences preferences;
 
 
 
-SteinhartHart thermistor(9479,13027,15419, 347.35, 320.85, 286.45);
+//SteinhartHart thermistor(10729,16535,20860, 348.15, 323.15, 303.15);
+SteinhartHart thermistor(15062.08,36874.80,82837.54, 348.15, 323.15, 303.15);
 
 Adafruit_ADS1115 ads;  /* Use this for the 16-bit version */
 
@@ -122,6 +124,11 @@ float tempC, tempF, tempA0, tempA1, tempA0f, tempA1f;
   int16_t adc0, adc1, adc2, adc3, therm1, therm2, therm3;
   float temp1, temp2, temp3;
   float volts0, volts1, volts2, volts3;
+
+double ADSToOhms(int16_t ADSreading) {
+      float voltsX = ads.computeVolts(ADSreading);
+      return (voltsX * 22000) / (3.3 - voltsX);
+}
 
 String getSensorReadings(){  //JSON constructor
 
@@ -349,15 +356,15 @@ void drawCalib(){
   //img.setTextFont(3);
   if ((tempC >= 75.0) && (tempC <= 75.2)) { 
     temp1 = tempC;
-    therm1 = adc0;
+    therm1 = ADSToOhms(adc0);
   }
   if ((tempC >= 50.0) && (tempC <= 50.2)) { 
     temp2 = tempC;
-    therm2 = adc0;
+    therm2 = ADSToOhms(adc0);
   }
   if ((tempC >= 30.0) && (tempC <= 30.2)) { 
     temp3 = tempC;
-    therm3 = adc0;
+    therm3 = ADSToOhms(adc0);
   }
   //if (temp1 > 0) {
      temp1string = String(temp1) + "C = " +String(therm1);
@@ -461,7 +468,7 @@ void drawSettings() {
   img.setTextColor(TFT_WHITE);
   if (setIcons > 1) {setIcons = 0;}
   if (setAlarm > 2) {setAlarm = 0;}
-  if (setUnits > 2) {setUnits = 0;}
+  if (setUnits > 2) {setUnits = 0; if (kincreased) {settemp-=273; forceADC(); kincreased = false;}}
   if (setBGC > 23) {setBGC = 0;}
   if (setFGC > 23) {setFGC = 0;}
   if (setVolume > 100) {setVolume = 0;}
@@ -470,7 +477,7 @@ void drawSettings() {
   img.drawNumber(setAlarm, 220, 0);
   String setUnitString;
   String setIconString;
-  if (setUnits == 0) {setUnitString = "C";} else if (setUnits == 1) {setUnitString = "F";} else {setUnitString = "K";}
+  if (setUnits == 0) {setUnitString = "C";} else if (setUnits == 1) {setUnitString = "F";} else {setUnitString = "K"; if (!kincreased) {settemp+=273; forceADC(); kincreased = true;}}
   if (setIcons == 0) {setIconString = "N";} else if (setIcons == 1) {setIconString = "Y";} 
   img.drawString(setUnitString, 220, 24);
   img.drawNumber(setBGC, 220, 24+24);
@@ -488,12 +495,12 @@ void doADC() {
   if (ads.conversionComplete()) {
     if (channel == 0) {
       adc0 = ads.getLastConversionResults();
-      if (setUnits == 0) {tempA0f = thermistor.resistanceToTemperature(adc0) - 273.15;}
+      if (setUnits == 0) {tempA0f = thermistor.resistanceToTemperature(ADSToOhms(adc0)) - 273.15;}
       else if (setUnits == 1) {
-        tempA0 = thermistor.resistanceToTemperature(adc0) - 273.15;
+        tempA0 = thermistor.resistanceToTemperature(ADSToOhms(adc0)) - 273.15;
         tempA0f = (tempA0 * 1.8) + 32;
       }
-      else if (setUnits == 2) {tempA0f = thermistor.resistanceToTemperature(adc0);}
+      else if (setUnits == 2) {tempA0f = thermistor.resistanceToTemperature(ADSToOhms(adc0));}
 
       ads.startADCReading(ADS1X15_REG_CONFIG_MUX_SINGLE_1, false);
       channel = 1;
@@ -501,12 +508,12 @@ void doADC() {
     }
     if (channel == 1) {
       adc1 = ads.getLastConversionResults();
-      if (setUnits == 0) {tempA1f = thermistor.resistanceToTemperature(adc0) - 273.15;}
+      if (setUnits == 0) {tempA1f = thermistor.resistanceToTemperature(ADSToOhms(adc1)) - 273.15;}
       else if (setUnits == 1) {
-        tempA1 = thermistor.resistanceToTemperature(adc0) - 273.15;
+        tempA1 = thermistor.resistanceToTemperature(ADSToOhms(adc1)) - 273.15;
         tempA1f = (tempA1 * 1.8) + 32;
       }
-      else if (setUnits == 2) {tempA1f = thermistor.resistanceToTemperature(adc0);}
+      else if (setUnits == 2) {tempA1f = thermistor.resistanceToTemperature(ADSToOhms(adc1));}
       ads.startADCReading(ADS1X15_REG_CONFIG_MUX_SINGLE_2, false);
       channel = 2;
       return;
@@ -528,6 +535,23 @@ void doADC() {
 
 }
 
+void forceADC() {
+  adc0 = ads.readADC_SingleEnded(0);
+  adc1 = ads.readADC_SingleEnded(1);
+  adc2 = ads.readADC_SingleEnded(2);
+  volts2 = ads.computeVolts(adc2) * 2.0;
+  adc0 = ads.getLastConversionResults();
+  if (setUnits == 0) {tempA0f = thermistor.resistanceToTemperature(ADSToOhms(adc0)) - 273.15; tempA1f = thermistor.resistanceToTemperature(ADSToOhms(adc1)) - 273.15;}
+  else if (setUnits == 1) {
+    tempA0 = thermistor.resistanceToTemperature(ADSToOhms(adc0)) - 273.15;
+    tempA0f = (tempA0 * 1.8) + 32;
+    tempA1 = thermistor.resistanceToTemperature(ADSToOhms(adc1)) - 273.15;
+    tempA1f = (tempA1 * 1.8) + 32;
+  }
+  else if (setUnits == 2) {tempA0f = thermistor.resistanceToTemperature(ADSToOhms(adc0)); tempA1f = thermistor.resistanceToTemperature(ADSToOhms(adc1));}
+  barx = mapf (volts2, 3.6, 4.1, 0, 20);
+}
+
 void savePrefs() {
   if (setFGC == setBGC) {setFGC = 15; setBGC = 0;}
   preferences.begin("my-app", false);
@@ -537,6 +561,7 @@ void savePrefs() {
   preferences.putInt("setBGC", setBGC);
   preferences.putInt("setVolume", setVolume); 
   preferences.putInt("setIcons", setIcons);
+  preferences.putInt("settemp", settemp);
   preferences.end();
   settingspage = false;
 }
@@ -599,6 +624,7 @@ void setup() {
   setBGC = preferences.getInt("setBGC", 0);
   setVolume = preferences.getInt("setVolume", 1);
   setIcons = preferences.getInt("setIcons", 1);
+  settemp = preferences.getInt("settemp", 145);
   preferences.end();
   if (setFGC == setBGC) {setFGC = 15; setBGC = 0;}
   if ((temp3 > 0) && (temp2 > 0) && (temp1 > 0)) {
@@ -611,20 +637,7 @@ void setup() {
         thermistor.calcCoefficients();
   }
   rssi = WiFi.RSSI();
-  adc0 = ads.readADC_SingleEnded(0);
-  adc1 = ads.readADC_SingleEnded(1);
-  adc2 = ads.readADC_SingleEnded(2);
-  volts2 = ads.computeVolts(adc2) * 2.0;
-  adc0 = ads.getLastConversionResults();
-  if (setUnits == 0) {tempA0f = thermistor.resistanceToTemperature(adc0) - 273.15; tempA1f = thermistor.resistanceToTemperature(adc0) - 273.15;}
-  else if (setUnits == 1) {
-    tempA0 = thermistor.resistanceToTemperature(adc0) - 273.15;
-    tempA0f = (tempA0 * 1.8) + 32;
-    tempA1 = thermistor.resistanceToTemperature(adc0) - 273.15;
-    tempA1f = (tempA1 * 1.8) + 32;
-  }
-  else if (setUnits == 2) {tempA0f = thermistor.resistanceToTemperature(adc0); tempA1f = thermistor.resistanceToTemperature(adc0);}
-  barx = mapf (volts2, 3.6, 4.1, 0, 20);
+  forceADC();
   drawTemps();
 
   WiFi.mode(WIFI_STA);
@@ -672,6 +685,7 @@ void setup() {
         delay(250);
         digitalWrite(PWR_LED_PIN, LOW);
         delay(250);
+        tft.fillScreen(TFT_BLACK);
     }
   }
   else {
