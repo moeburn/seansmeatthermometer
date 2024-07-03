@@ -29,13 +29,26 @@
 #define ETA_INTERVAL 15000
 
 int8_t PROGMEM TwinkleTwinkle[] = {
-  NOTE_C5,NOTE_C5,NOTE_G5,NOTE_G5,NOTE_A5,NOTE_A5,NOTE_G5,BEAT_2,
+  NOTE_SILENCE,BEAT_2,NOTE_C5,NOTE_C5,NOTE_G5,NOTE_G5,NOTE_A5,NOTE_A5,NOTE_G5,BEAT_2,
   NOTE_F5,NOTE_F5,NOTE_E5,NOTE_E5,NOTE_D5,NOTE_D5,NOTE_C5,BEAT_2,
   NOTE_G5,NOTE_G5,NOTE_F5,NOTE_F5,NOTE_E5,NOTE_E5,NOTE_D5,BEAT_2,
   NOTE_G5,NOTE_G5,NOTE_F5,NOTE_F5,NOTE_E5,NOTE_E5,NOTE_D5,BEAT_2,
   NOTE_C5,NOTE_C5,NOTE_G5,NOTE_G5,NOTE_A5,NOTE_A5,NOTE_G5,BEAT_2,
   NOTE_F5,NOTE_F5,NOTE_E5,NOTE_E5,NOTE_D5,NOTE_D5,NOTE_C5,BEAT_4,  
   NOTE_SILENCE,BEAT_5,SCORE_END
+};
+
+int8_t PROGMEM TwoBits[] = {
+  NOTE_SILENCE,BEAT_2,NOTE_C7,BEAT_2,NOTE_G6,NOTE_G6,NOTE_A6,BEAT_2,NOTE_G6,BEAT_2,
+  NOTE_SILENCE,BEAT_2,NOTE_B6,BEAT_2,NOTE_C7,BEAT_2,NOTE_SILENCE,SCORE_END
+};
+
+int8_t PROGMEM UkranianBellCarol[] = {
+  NOTE_SILENCE,BEAT_2,NOTE_DS6,BEAT_2,NOTE_D6,NOTE_DS6,NOTE_C6,BEAT_2,
+  NOTE_DS6,BEAT_2,NOTE_D6,NOTE_DS6,NOTE_C6,BEAT_2,
+  NOTE_DS6,BEAT_2,NOTE_D6,NOTE_DS6,NOTE_C6,BEAT_2,
+  NOTE_DS6,BEAT_2,NOTE_D6,NOTE_DS6,NOTE_C6,BEAT_2,
+  NOTE_SILENCE,SCORE_END
 };
 
 int8_t PROGMEM AlarmSong[] = {
@@ -47,7 +60,9 @@ int8_t PROGMEM AlarmSong[] = {
 };
 
 XT_MusicScore_Class Music(TwinkleTwinkle,TEMPO_ALLEGRO,INSTRUMENT_PIANO); 
-XT_MusicScore_Class Alarm(AlarmSong,TEMPO_ALLEGRO,INSTRUMENT_PIANO);
+XT_MusicScore_Class ShaveAndAHaircut(TwoBits,TEMPO_PRESTISSIMO  ,INSTRUMENT_HARPSICHORD ); 
+XT_MusicScore_Class DingFriesAreDone(UkranianBellCarol,TEMPO_PRESTISSIMO  , INSTRUMENT_SAXOPHONE  ); 
+XT_MusicScore_Class Alarm(AlarmSong,TEMPO_ALLEGRO,  INSTRUMENT_ORGAN );
 
 
 #include "SPIFFS.h"
@@ -467,7 +482,7 @@ void drawSettings() {
 
   img.setTextColor(TFT_WHITE);
   if (setIcons > 1) {setIcons = 0;}
-  if (setAlarm > 2) {setAlarm = 0;}
+  if (setAlarm > 4) {setAlarm = 0;}
   if (setUnits > 2) {setUnits = 0; if (kincreased) {settemp-=273; forceADC(); kincreased = false;}}
   if (setBGC > 23) {setBGC = 0;}
   if (setFGC > 23) {setFGC = 0;}
@@ -567,6 +582,7 @@ void savePrefs() {
 }
 
 void doSound() {
+  digitalWrite(MUTE_PIN, HIGH); 
   if (setAlarm == 0) {
     if(Sound.Playing==false)       
     DacAudio.Play(&Sound);
@@ -578,6 +594,14 @@ void doSound() {
   else if (setAlarm == 2) {
     if(Alarm.Playing==false)       
     DacAudio.Play(&Alarm);
+  }
+  else if (setAlarm == 3) {
+    if(ShaveAndAHaircut.Playing==false)       
+    DacAudio.Play(&ShaveAndAHaircut);
+  }
+  else if (setAlarm == 4) {
+    if(DingFriesAreDone.Playing==false)       
+    DacAudio.Play(&DingFriesAreDone);
   }
 }
 
@@ -756,7 +780,7 @@ void loop() {
   }
   DacAudio.FillBuffer(); 
 
-  if ((Sound.Playing) || (Music.Playing) || (Alarm.Playing)) {
+  if ((Sound.Playing) || (Music.Playing) || (Alarm.Playing) || (DingFriesAreDone.Playing) || (ShaveAndAHaircut.Playing)) {
     digitalWrite(MUTE_PIN, HIGH); 
   }
   else  {digitalWrite(MUTE_PIN, LOW);}
