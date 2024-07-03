@@ -48,6 +48,8 @@ int8_t PROGMEM UkranianBellCarol[] = {
   NOTE_DS6,BEAT_2,NOTE_D6,NOTE_DS6,NOTE_C6,BEAT_2,
   NOTE_DS6,BEAT_2,NOTE_D6,NOTE_DS6,NOTE_C6,BEAT_2,
   NOTE_DS6,BEAT_2,NOTE_D6,NOTE_DS6,NOTE_C6,BEAT_2,
+  NOTE_G5, NOTE_A5, NOTE_B5, NOTE_C6, NOTE_D6,NOTE_DS6, NOTE_F6, NOTE_G6,  NOTE_F6, BEAT_2, NOTE_DS6,BEAT_2,//G Ab Bb C D Ds F G F
+  NOTE_G5, NOTE_A5, NOTE_B5, NOTE_C6, NOTE_D6,NOTE_DS6, NOTE_F6, NOTE_G6,  NOTE_F6, BEAT_2, NOTE_DS6,BEAT_2,
   NOTE_SILENCE,SCORE_END
 };
 
@@ -69,32 +71,60 @@ XT_MusicScore_Class Alarm(AlarmSong,TEMPO_ALLEGRO,  INSTRUMENT_ORGAN );
 #include <Arduino_JSON.h>
   
 uint16_t cmap[24];
+const char* cmapNames[24];
+
+
 void initializeCmap() {
-    cmap[0] =  TFT_BLACK;              /*   0,   0,   0 */
-    cmap[1] =  TFT_NAVY;               /*   0,   0, 128 */
-    cmap[2] =  TFT_DARKGREEN;          /*   0, 128,   0 */
-    cmap[3] =  TFT_DARKCYAN;           /*   0, 128, 128 */
-    cmap[4] =  TFT_MAROON;             /* 128,   0,   0 */
-    cmap[5] =  TFT_PURPLE;             /* 128,   0, 128 */
-    cmap[6] =  TFT_OLIVE;              /* 128, 128,   0 */
-    cmap[7] =  TFT_LIGHTGREY;          /* 211, 211, 211 */
-    cmap[8] =  TFT_DARKGREY;           /* 128, 128, 128 */
-    cmap[9] =  TFT_BLUE;               /*   0,   0, 255 */
-    cmap[10] =  TFT_GREEN;             /*   0, 255,   0 */
-    cmap[11] =  TFT_CYAN;              /*   0, 255, 255 */
-    cmap[12] =  TFT_RED;               /* 255,   0,   0 */
-    cmap[13] =  TFT_MAGENTA;           /* 255,   0, 255 */
-    cmap[14] =  TFT_YELLOW;            /* 255, 255,   0 */
-    cmap[15] =  TFT_WHITE;             /* 255, 255, 255 */
-    cmap[16] =  TFT_ORANGE;            /* 255, 180,   0 */
-    cmap[17] =  TFT_GREENYELLOW;       /* 180, 255,   0 */
-    cmap[18] =  TFT_PINK;              /* 255, 192, 203 */
-    cmap[19] =  TFT_BROWN;             /* 150,  75,   0 */
-    cmap[20] =  TFT_GOLD;              /* 255, 215,   0 */
-    cmap[21] =  TFT_SILVER;            /* 192, 192, 192 */
-    cmap[22] =  TFT_SKYBLUE;           /* 135, 206, 235 */
-    cmap[23] =  TFT_VIOLET;            /* 180,  46, 226 */
+    cmap[0] =  TFT_BLACK;
+    cmapNames[0] = "BLACK";
+    cmap[1] =  TFT_NAVY;
+    cmapNames[1] = "NAVY";
+    cmap[2] =  TFT_DARKGREEN;
+    cmapNames[2] = "DARKGREEN";
+    cmap[3] =  TFT_DARKCYAN;
+    cmapNames[3] = "DARKCYAN";
+    cmap[4] =  TFT_MAROON;
+    cmapNames[4] = "MAROON";
+    cmap[5] =  TFT_PURPLE;
+    cmapNames[5] = "PURPLE";
+    cmap[6] =  TFT_OLIVE;
+    cmapNames[6] = "OLIVE";
+    cmap[7] =  TFT_LIGHTGREY;
+    cmapNames[7] = "LIGHTGREY";
+    cmap[8] =  TFT_DARKGREY;
+    cmapNames[8] = "DARKGREY";
+    cmap[9] =  TFT_BLUE;
+    cmapNames[9] = "BLUE";
+    cmap[10] =  TFT_GREEN;
+    cmapNames[10] = "GREEN";
+    cmap[11] =  TFT_CYAN;
+    cmapNames[11] = "CYAN";
+    cmap[12] =  TFT_RED;
+    cmapNames[12] = "RED";
+    cmap[13] =  TFT_MAGENTA;
+    cmapNames[13] = "MAGENTA";
+    cmap[14] =  TFT_YELLOW;
+    cmapNames[14] = "YELLOW";
+    cmap[15] =  TFT_WHITE;
+    cmapNames[15] = "WHITE";
+    cmap[16] =  TFT_ORANGE;
+    cmapNames[16] = "ORANGE";
+    cmap[17] =  TFT_GREENYELLOW;
+    cmapNames[17] = "GREENYELLOW";
+    cmap[18] =  TFT_PINK;
+    cmapNames[18] = "PINK";
+    cmap[19] =  TFT_BROWN;
+    cmapNames[19] = "BROWN";
+    cmap[20] =  TFT_GOLD;
+    cmapNames[20] = "GOLD";
+    cmap[21] =  TFT_SILVER;
+    cmapNames[21] = "SILVER";
+    cmap[22] =  TFT_SKYBLUE;
+    cmapNames[22] = "SKYBLUE";
+    cmap[23] =  TFT_VIOLET;
+    cmapNames[23] = "VIOLET";
 }
+
 
 double oldtemp, tempdiff, eta, eta2, oldtemp2, tempdiff2;
 int etamins, etasecs;
@@ -106,6 +136,7 @@ int setSelection = 0;
 int setAlarm, setUnits, setBGC;
 int setFGC = 15;
 int setVolume = 5;
+int setLEDmode = 0;
 
 bool b1pressed = false;
 bool b2pressed = false;
@@ -447,7 +478,7 @@ void drawSettings() {
     if (!digitalRead(button1)) {b1pressed = true;}
     if (!digitalRead(button2)) {setSelection++;}
   }
-  if (setSelection > 7) {setSelection = 0;}
+  if (setSelection > 8) {setSelection = 0;}
   if (setSelection == 0) {img.setTextColor(TFT_BLACK, TFT_WHITE, true); if (b1pressed) {setAlarm++; b1pressed = false;}} else {img.setTextColor(TFT_WHITE);}
 
   img.println("Alarm:");
@@ -472,36 +503,42 @@ void drawSettings() {
 
   img.println("Icons:");
 
-  if (setSelection == 6) {img.setTextColor(TFT_BLACK, TFT_WHITE, true); if (b1pressed) {doSound(); b1pressed = false;}} else {img.setTextColor(TFT_WHITE);}
+  if (setSelection == 6) {img.setTextColor(TFT_BLACK, TFT_WHITE, true); if (b1pressed) {setLEDmode++; b1pressed = false;}} else {img.setTextColor(TFT_WHITE);}
+
+  img.println("LED Mode:");
+
+  if (setSelection == 7) {img.setTextColor(TFT_BLACK, TFT_WHITE, true); if (b1pressed) {doSound(); b1pressed = false;}} else {img.setTextColor(TFT_WHITE);}
 
   img.println(">Test Spk<");
 
-  if (setSelection == 7) {img.setTextColor(TFT_BLACK, TFT_WHITE, true); if (b1pressed) {savePrefs(); b1pressed = false;}} else {img.setTextColor(TFT_WHITE);}
+  if (setSelection == 8) {img.setTextColor(TFT_BLACK, TFT_WHITE, true); if (b1pressed) {savePrefs(); b1pressed = false;}} else {img.setTextColor(TFT_WHITE);}
   img.println(">Save<");
 
 
   img.setTextColor(TFT_WHITE);
   if (setIcons > 1) {setIcons = 0;}
   if (setAlarm > 4) {setAlarm = 0;}
+  if (setLEDmode > 2) {setLEDmode = 0;}
   if (setUnits > 2) {setUnits = 0; if (kincreased) {settemp-=273; forceADC(); kincreased = false;}}
   if (setBGC > 23) {setBGC = 0;}
   if (setFGC > 23) {setFGC = 0;}
   if (setVolume > 100) {setVolume = 0;}
-  img.setCursor(220,0);
+  img.setCursor(240,0);
   img.setTextDatum(TR_DATUM);
-  img.drawNumber(setAlarm, 220, 0);
+  img.drawNumber(setAlarm, 240, 0);
   String setUnitString;
   String setIconString;
   if (setUnits == 0) {setUnitString = "C";} else if (setUnits == 1) {setUnitString = "F";} else {setUnitString = "K"; if (!kincreased) {settemp+=273; forceADC(); kincreased = true;}}
   if (setIcons == 0) {setIconString = "N";} else if (setIcons == 1) {setIconString = "Y";} 
-  img.drawString(setUnitString, 220, 24);
-  img.drawNumber(setBGC, 220, 24+24);
-  img.drawNumber(setFGC, 220, 24+24+24);
-  img.drawNumber(setVolume, 220, 24+24+24+24);
-  img.drawString(setIconString, 220, 24+24+24+24+24);
+  img.drawString(setUnitString, 240, 24);
+  img.drawNumber(setBGC, 240, 24+24);
+  img.drawNumber(setFGC, 240, 24+24+24);
+  img.drawNumber(setVolume, 240, 24+24+24+24);
+  img.drawString(setIconString, 240, 24+24+24+24+24);
+  img.drawNumber(setLEDmode, 240, 24+24+24+24+24+24);
   img.setTextDatum(TC_DATUM);
   img.setTextColor(cmap[setFGC], cmap[setBGC], true);
-  String sampleString = "SAMPLE 188.8";
+  String sampleString = String(setFGC) +  cmapNames[setFGC];
   img.drawString(sampleString, 120, 216);
   img.pushSprite(0, 0);
 }
@@ -576,6 +613,7 @@ void savePrefs() {
   preferences.putInt("setBGC", setBGC);
   preferences.putInt("setVolume", setVolume); 
   preferences.putInt("setIcons", setIcons);
+  preferences.putInt("setLEDmode", setIcons);
   preferences.putInt("settemp", settemp);
   preferences.end();
   settingspage = false;
@@ -647,6 +685,7 @@ void setup() {
   setFGC = preferences.getInt("setFGC", 15);
   setBGC = preferences.getInt("setBGC", 0);
   setVolume = preferences.getInt("setVolume", 1);
+  setLEDmode = preferences.getInt("setLEDmode", 1);
   setIcons = preferences.getInt("setIcons", 1);
   settemp = preferences.getInt("settemp", 145);
   preferences.end();
@@ -768,11 +807,18 @@ void loop() {
     events.send("ping",NULL,millis());  
     events.send(getSensorReadings().c_str(),"new_readings" ,millis());
   }
-  //delay(10);
-  //if ((tempC > 76) && (!calibrationMode)) {calibrationMode = true;}
+
   every(5){
+    
     if (adc1 < is2connectedthreshold) {is2connected = true;} else {is2connected = false;} 
     if (!calibrationMode) {
+      if (setLEDmode == 0) {analogWrite(PWR_LED_PIN, 0);}
+      else if (setLEDmode == 1) {analogWrite(PWR_LED_PIN, 255);}
+      else if (setLEDmode == 2) {
+          float led_brightness = mapf(tempA0f, 70, settemp, 0, 255); 
+          analogWrite(PWR_LED_PIN, led_brightness);
+        }
+
       if (!settingspage) {drawTemps();}
       else {drawSettings();}
       }
@@ -789,6 +835,8 @@ void loop() {
   if ((tempA0f >= settemp) ||  (tempA1f >= settemp)) {  //If 2nd probe is connected and either temp goes above set temp, sound the alarm
     doSound();
   }
+
+  
 
   every (ETA_INTERVAL) {  
     tempdiff = tempA0f - oldtemp;
