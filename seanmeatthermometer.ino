@@ -26,7 +26,8 @@
 #define button2 16 //TX2
 #define alarm_hyst 0.2
 #define is2connectedthreshold 26300
-#define ETA_INTERVAL 15000
+#define ETA_INTERVAL 15
+
 
 int8_t PROGMEM TwinkleTwinkle[] = {
   NOTE_SILENCE,BEAT_2,NOTE_C5,NOTE_C5,NOTE_G5,NOTE_G5,NOTE_A5,NOTE_A5,NOTE_G5,BEAT_2,
@@ -135,7 +136,7 @@ int channel = 0;
 int setSelection = 0;
 int setAlarm, setUnits, setBGC;
 int setFGC = 15;
-int setVolume = 5;
+int setVolume = 100;
 int setLEDmode = 0;
 
 bool b1pressed = false;
@@ -180,8 +181,8 @@ String getSensorReadings(){  //JSON constructor
 
   readings["sensor1"] = String(tempA0f);
   readings["sensor2"] = String(tempA1f);
-  readings["sensor3"] = String(tempC);
-  readings["sensor4"] = String(tempA0);
+  readings["sensor3"] = String(settemp);
+  readings["sensor4"] = String(etamins);
 
   String jsonString = JSON.stringify(readings);
   return jsonString;
@@ -518,7 +519,7 @@ void drawSettings() {
   img.setTextColor(TFT_WHITE);
   if (setIcons > 1) {setIcons = 0;}
   if (setAlarm > 4) {setAlarm = 0;}
-  if (setLEDmode > 2) {setLEDmode = 0;}
+  if (setLEDmode > 3) {setLEDmode = 0;}
   if (setUnits > 2) {setUnits = 0; if (kincreased) {settemp-=273; forceADC(); kincreased = false;}}
   if (setBGC > 23) {setBGC = 0;}
   if (setFGC > 23) {setFGC = 0;}
@@ -613,7 +614,7 @@ void savePrefs() {
   preferences.putInt("setBGC", setBGC);
   preferences.putInt("setVolume", setVolume); 
   preferences.putInt("setIcons", setIcons);
-  preferences.putInt("setLEDmode", setIcons);
+  preferences.putInt("setLEDmode", setLEDmode);
   preferences.putInt("settemp", settemp);
   preferences.end();
   settingspage = false;
@@ -658,7 +659,7 @@ void setup() {
   img.fillSprite(TFT_BLUE);
   
   DacAudio.StopAllSounds();
-  DacAudio.DacVolume=setVolume;
+  
   
 
 
@@ -685,10 +686,11 @@ void setup() {
   setFGC = preferences.getInt("setFGC", 15);
   setBGC = preferences.getInt("setBGC", 0);
   setVolume = preferences.getInt("setVolume", 1);
-  setLEDmode = preferences.getInt("setLEDmode", 1);
+  setLEDmode = preferences.getInt("setLEDmode", 2);
   setIcons = preferences.getInt("setIcons", 1);
   settemp = preferences.getInt("settemp", 145);
   preferences.end();
+  DacAudio.DacVolume=setVolume;
   if (setFGC == setBGC) {setFGC = 15; setBGC = 0;}
   if ((temp3 > 0) && (temp2 > 0) && (temp1 > 0)) {
         thermistor.setTemperature1(temp1 + 273.15);
@@ -813,11 +815,13 @@ void loop() {
     if (adc1 < is2connectedthreshold) {is2connected = true;} else {is2connected = false;} 
     if (!calibrationMode) {
       if (setLEDmode == 0) {analogWrite(PWR_LED_PIN, 0);}
-      else if (setLEDmode == 1) {analogWrite(PWR_LED_PIN, 255);}
-      else if (setLEDmode == 2) {
-          float led_brightness = mapf(tempA0f, 70, settemp, 0, 255); 
+      else if (setLEDmode == 1) {analogWrite(PWR_LED_PIN, 40);}
+      else if (setLEDmode == 2) {analogWrite(PWR_LED_PIN, 255);}
+      else if (setLEDmode == 3) {
+          float led_brightness = mapf(tempA0f, 0, settemp, 0, 255); 
           analogWrite(PWR_LED_PIN, led_brightness);
         }
+      
 
       if (!settingspage) {drawTemps();}
       else {drawSettings();}
@@ -838,21 +842,23 @@ void loop() {
 
   
 
-  every (ETA_INTERVAL) {  
-    tempdiff = tempA0f - oldtemp;
+  every (15000) {  //manually set this to ETA_INTERVAL*1000, can't hardcode due to macro
+        tempdiff = tempA0f - oldtemp;
     if (is2connected) {  //If 2nd probe is connected, calculate whichever ETA is sooner in seconds
       tempdiff2 = tempA1f - oldtemp2;
       eta = (((settemp - tempA0f)/tempdiff) * ETA_INTERVAL);
       eta2 = (((settemp - tempA1f)/tempdiff2) * ETA_INTERVAL);
       if ((eta2 > 0) && (eta2 < 1000) && (eta2 < eta)) {eta = eta2;}
+      
       oldtemp2 = tempA1f;
     }
     else  //Else if only one probe is connected, calculate the ETA in seconds
     {
       eta = (((settemp - tempA0f)/tempdiff) * ETA_INTERVAL);
     }
-    etamins = eta / (ETA_INTERVAL / 1000); 
+    etamins = eta / 60;  //cast it to int and divide it by 60 to get minutes with no remainder, ignore seconds because of inaccuracy
     oldtemp = tempA0f;
+    
   }
 
 }
