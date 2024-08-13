@@ -372,7 +372,7 @@ void drawTemps() {
     img.fillRect(214,230,barx,9,cmap[setFGC]);
     img.drawFastVLine(234,232,4,cmap[setFGC]);
     img.drawFastVLine(235,232,4,cmap[setFGC]);
-    drawWiFiSignalStrength(200,237,9);
+    if (WiFi.status() == WL_CONNECTED) {drawWiFiSignalStrength(200,237,9);}
   }
   else {
     String v2String = String(rssi) + "dB/" + String(volts2,2) + "v";
@@ -387,20 +387,23 @@ void drawTemps() {
 }
 
 void drawCalib(){
-  img.fillSprite(TFT_ORANGE);
+  img.fillSprite(TFT_MAROON);
   img.setTextSize(2);
   img.setTextColor(TFT_WHITE, TFT_BLACK, true);
   img.setTextWrap(true); // Wrap on width
   img.setTextFont(1);
   img.setTextDatum(TL_DATUM);
   img.setCursor(0,0);
-  img.print("Calibrating:");
+  img.println("Calibrating!");
+  img.setTextSize(1);
+  img.setCursor(0,200);
+  img.println("Please wait for all 3 temperature points to be measured...");
+  img.setTextSize(2);
 
-  //adc0 = ads.readADC_SingleEnded(0);
-  String modeString = "Calibration Mode!";
+
    dallasString = String(tempC, 1) + " C, A0:" + String(adc0);
   img.drawString(dallasString, 10,20);
-  //img.setTextFont(3);
+
   if ((tempC >= 75.0) && (tempC <= 75.2)) { 
     temp1 = tempC;
     therm1 = ADSToOhms(adc0);
@@ -413,22 +416,20 @@ void drawCalib(){
     temp3 = tempC;
     therm3 = ADSToOhms(adc0);
   }
-  //if (temp1 > 0) {
-     temp1string = String(temp1) + "C = " +String(therm1);
+
+     temp1string = "75C = " +String(therm1);
     img.drawString(temp1string, 10,40);
-  //}
-  //if (temp2 > 0) {
-     temp2string = String(temp2) + "C = " +String(therm2);
+
+     temp2string = "50C = " +String(therm2);
     img.drawString(temp2string, 10,60);
-  //}
-  //if (temp3 > 0) {
-     temp3string = String(temp3) + "C = " +String(therm3);
+
+     temp3string = "30C = " +String(therm3);
     img.drawString(temp3string, 10,80);
-  //}
+
   if ((temp3 > 0) && (temp2 > 0) && (temp1 > 0)) {
         img.fillSprite(TFT_GREEN);
         img.setCursor(0,0);
-        img.print("Calibration complete!");
+        img.print("Calibration saved, please reboot!");
         img.setTextSize(2);
         thermistor.setTemperature1(temp1 + 273.15);
         thermistor.setTemperature2(temp2 + 273.15);
@@ -653,7 +654,7 @@ void setup() {
   tft.setTextColor(TFT_WHITE, TFT_BLACK, true);
   tft.setTextWrap(true); // Wrap on width
   tft.setTextFont(2);
-  tft.setTextSize(2);
+  tft.setTextSize(1);
   img.setColorDepth(8);
   img.createSprite(239, 239);
   img.fillSprite(TFT_BLUE);
@@ -683,9 +684,9 @@ void setup() {
   therm3 = preferences.getInt("therm3", 0);
   setAlarm = preferences.getInt("setAlarm", 0);
   setUnits = preferences.getInt("setUnits", 1);
-  setFGC = preferences.getInt("setFGC", 15);
-  setBGC = preferences.getInt("setBGC", 0);
-  setVolume = preferences.getInt("setVolume", 1);
+  setFGC = preferences.getInt("setFGC", 12);
+  setBGC = preferences.getInt("setBGC", 4);
+  setVolume = preferences.getInt("setVolume", 100);
   setLEDmode = preferences.getInt("setLEDmode", 2);
   setIcons = preferences.getInt("setIcons", 1);
   settemp = preferences.getInt("settemp", 145);
@@ -712,7 +713,14 @@ void setup() {
     nvs_flash_init(); // initialize the NVS partition.
     tft.fillScreen(TFT_ORANGE);
     tft.setCursor(0, 0);
-    tft.println("ALL SETTINGS RESET.  PLEASE CONNECT TO 'MR MEAT SETUP' WIFI AP, AND BROWSE TO 192.168.4.1");
+    tft.setTextFont(4);
+    tft.setTextSize(1);
+    tft.println("SETTINGS RESET.");
+    tft.println("");
+    tft.println("Please connect to");
+    tft.println("'MR MEAT SETUP'");
+    tft.println("WiFi, and browse to");
+    tft.println("192.168.4.1.");
     wm.resetSettings();
     
 
@@ -751,6 +759,7 @@ void setup() {
         digitalWrite(PWR_LED_PIN, LOW);
         delay(250);
         tft.fillScreen(TFT_BLACK);
+        ESP.restart();
     }
   }
   else {
@@ -769,6 +778,12 @@ void setup() {
     calibrationMode = true;
     temperatureSensors.onIntervalElapsed(handleIntervalElapsed);
     temperatureSensors.onTemperatureChange(handleTemperatureChange);
+    tft.fillScreen(TFT_PURPLE);
+    tft.setCursor(0, 0);
+    tft.setTextFont(4);
+    tft.println("Calibration Mode!");
+    tft.println("To begin, connect 1 or 2 meat thermometer probes, immerse them and the calibration probe in a small cup of hot freshly boiled water (>75C), and press any button.");
+    while (digitalRead(button1) && digitalRead(button2)) {}
   }
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){  //If someone connects to the root of our HTTP site, serve index.html
     request->send(SPIFFS, "/index.html", "text/html");
@@ -805,7 +820,7 @@ void loop() {
   }
   every(10000) {       //Update web interface once every 10 seconds
     volts2 = ads.computeVolts(adc2) * 2.0;
-    barx = mapf (volts2, 3.6, 4.1, 0, 20);
+    barx = mapf (volts2, 3.5, 4.0, 0, 20);
     events.send("ping",NULL,millis());  
     events.send(getSensorReadings().c_str(),"new_readings" ,millis());
   }
