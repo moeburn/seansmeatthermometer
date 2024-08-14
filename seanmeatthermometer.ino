@@ -168,7 +168,7 @@ AsyncEventSource events("/events");
 JSONVar readings;
 
 float tempC, tempF, tempA0, tempA1, tempA0f, tempA1f;
-  int16_t adc0, adc1, adc2, adc3, therm1, therm2, therm3;
+  long adc0, adc1, adc2, adc3, therm1, therm2, therm3;
   float temp1, temp2, temp3;
   float volts0, volts1, volts2, volts3;
 
@@ -236,11 +236,11 @@ void handleTemperatureChange(int deviceIndex, int32_t temperatureRAW)
   tempF = temperatureSensors.rawToFahrenheit(temperatureRAW);
 }
 
-void handleIntervalElapsed(int deviceIndex, int32_t temperatureRAW)
+/*void handleIntervalElapsed(int deviceIndex, int32_t temperatureRAW)
 {
   tempC = temperatureSensors.rawToCelsius(temperatureRAW);
   tempF = temperatureSensors.rawToFahrenheit(temperatureRAW);  
-}
+}*/
 
 long mapf(float x, float in_min, float in_max, float out_min, float out_max)
 {
@@ -248,7 +248,7 @@ long mapf(float x, float in_min, float in_max, float out_min, float out_max)
 }
 
 
-  String dallasString,  temp1string,temp2string,temp3string ;
+  String dallasString,  temp1string,temp2string,temp3string, coeffAstring,  coeffBstring,  coeffCstring;
   
 void drawWiFiSignalStrength(int32_t x, int32_t y, int32_t radius) {
     // Get the RSSI value
@@ -386,6 +386,8 @@ void drawTemps() {
   img.pushSprite(0, 0);
 }
 
+
+
 void drawCalib(){
   img.fillSprite(TFT_MAROON);
   img.setTextSize(2);
@@ -401,7 +403,7 @@ void drawCalib(){
   img.setTextSize(2);
 
 
-   dallasString = String(tempC, 1) + " C, A0:" + String(adc0);
+   dallasString = String(tempC, 1) + " C, A0: " + String(ADSToOhms(adc0));
   img.drawString(dallasString, 10,20);
 
   if ((tempC >= 75.0) && (tempC <= 75.2)) { 
@@ -427,29 +429,20 @@ void drawCalib(){
     img.drawString(temp3string, 10,80);
 
   if ((temp3 > 0) && (temp2 > 0) && (temp1 > 0)) {
-        img.fillSprite(TFT_GREEN);
-        img.setCursor(0,0);
-        img.print("Calibration saved, please reboot!");
-        img.setTextSize(2);
-        thermistor.setTemperature1(temp1 + 273.15);
-        thermistor.setTemperature2(temp2 + 273.15);
-        thermistor.setTemperature3(temp3 + 273.15);
-        thermistor.setResistance1(therm1);
-        thermistor.setResistance2(therm2);
-        thermistor.setResistance3(therm3);
-        String coeffAstring = "A: " + String(thermistor.getCoeffA());
-        String coeffBstring = "B: " + String(thermistor.getCoeffB());
-        String coeffCstring = "C: " + String(thermistor.getCoeffC());
-
-        img.drawString(temp1string, 10,40);
-        img.drawString(temp2string, 10,60);
-        img.drawString(temp3string, 10,80);
-        img.drawString(coeffAstring, 10,100);
-        img.drawString(coeffBstring, 10,120);
-        img.drawString(coeffCstring, 10,140);
 
         if (!saved) {
-          digitalWrite(MUTE_PIN, HIGH);
+          //digitalWrite(MUTE_PIN, HIGH);
+          thermistor.setTemperature1(temp1 + 273.15);
+          thermistor.setTemperature2(temp2 + 273.15);
+          thermistor.setTemperature3(temp3 + 273.15);
+          thermistor.setResistance1(therm1);
+          thermistor.setResistance2(therm2);
+          thermistor.setResistance3(therm3);
+          thermistor.calcCoefficients();
+           coeffAstring = "A: " + String(thermistor.getCoeffA(), 5);
+           coeffBstring = "B: " + String(thermistor.getCoeffB(), 5);
+           coeffCstring = "C: " + String(thermistor.getCoeffC(), 5);
+
           preferences.begin("my-app", false);
           preferences.putInt("temp1", temp1);
           preferences.putInt("temp2", temp2);
@@ -459,8 +452,20 @@ void drawCalib(){
           preferences.putInt("therm3", therm3);
           preferences.end();
           saved = true;
-          DacAudio.Play(&Music); 
+             // if(Music.Playing==false) {DacAudio.Play(&Music);}
         }
+        img.fillSprite(TFT_GREEN);
+        img.setCursor(0,0);
+        img.println("Calibration saved, please reboot!");
+        img.setTextSize(2);
+
+        img.drawString(temp1string, 10,40);
+        img.drawString(temp2string, 10,60);
+        img.drawString(temp3string, 10,80);
+        img.drawString(coeffAstring, 10,100);
+        img.drawString(coeffBstring, 10,120);
+        img.drawString(coeffCstring, 10,140);
+
   }
   img.pushSprite(0, 0);
 }
@@ -776,13 +781,13 @@ void setup() {
     temp2 = 0;
     temp3 = 0;
     calibrationMode = true;
-    temperatureSensors.onIntervalElapsed(handleIntervalElapsed);
+    //temperatureSensors.onIntervalElapsed(handleIntervalElapsed);
     temperatureSensors.onTemperatureChange(handleTemperatureChange);
     tft.fillScreen(TFT_PURPLE);
     tft.setCursor(0, 0);
     tft.setTextFont(4);
     tft.println("Calibration Mode!");
-    tft.println("To begin, connect 1 or 2 meat thermometer probes, immerse them and the calibration probe in a small cup of hot freshly boiled water (>75C), and press any button.");
+    tft.println("To begin, connect 1 meat probe in the left hole, immerse it and the calibration probe in a small cup of hot freshly boiled water (>75C), then press any button.");
     while (digitalRead(button1) && digitalRead(button2)) {}
   }
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){  //If someone connects to the root of our HTTP site, serve index.html
@@ -851,7 +856,7 @@ void loop() {
   else  {digitalWrite(MUTE_PIN, LOW);}
   
 
-  if ((tempA0f >= settemp) ||  (tempA1f >= settemp)) {  //If 2nd probe is connected and either temp goes above set temp, sound the alarm
+  if (((tempA0f >= settemp) ||  (tempA1f >= settemp)) && (!calibrationMode)) {  //If 2nd probe is connected and either temp goes above set temp, sound the alarm
     doSound();
   }
 
