@@ -230,7 +230,7 @@ void handleTemperatureChange(int deviceIndex, int32_t temperatureRAW)
   tempF = temperatureSensors.rawToFahrenheit(temperatureRAW);
 }
 
-long mapf(float x, float in_min, float in_max, float out_min, float out_max)  //like default map function but returns float instead of int
+double mapf(float x, float in_min, float in_max, float out_min, float out_max)  //like default map function but returns float instead of int
 {
   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
