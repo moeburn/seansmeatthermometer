@@ -601,7 +601,7 @@ void savePrefs() { //save settings routine
 }
 
 void doSound() { //play alarm 
-  digitalWrite(MUTE_PIN, HIGH); 
+if (setVolume > 0) {digitalWrite(MUTE_PIN, HIGH);}
   if (setAlarm == 0) {
     if(Sound.Playing==false)       
     DacAudio.Play(&Sound);
@@ -823,7 +823,7 @@ void loop() {  //do this all the time, main CPU loop
   }
   DacAudio.FillBuffer(); //be constantly filling the memory with audio so it's ready to play without stutters on demand
 
-  if ((Sound.Playing) || (Music.Playing) || (Alarm.Playing) || (DingFriesAreDone.Playing) || (ShaveAndAHaircut.Playing)) {  //if we're playing anything
+  if (((Sound.Playing) || (Music.Playing) || (Alarm.Playing) || (DingFriesAreDone.Playing) || (ShaveAndAHaircut.Playing)) && (setVolume > 0)) {  //if we're playing anything
     digitalWrite(MUTE_PIN, HIGH);  //turn on the 2n3904 transistor to unmute the speaker
   }
   else  {digitalWrite(MUTE_PIN, LOW);} //otherwise mute it
